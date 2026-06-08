@@ -1,0 +1,64 @@
+# import all modules
+import os, json, datetime
+from dotenv import load_dotenv
+from google import genai
+from google.genai import types
+import config
+
+# get api key from .env
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+
+# get system prompt
+with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
+    system_prompt = system_prompt_file.read()
+
+# start gemini client
+client = genai.Client(api_key = GEMINI_API_KEY)
+
+# get existing history for the day
+if os.path.exists(config.HIST_JSON):
+    with open(config.HIST_JSON, 'r') as hist_f:
+        hist_data = json.load(hist_f)
+        if not hist_data["date"] == datetime.date.today().isoformat():
+            history = []
+        else:
+            history = hist_data["history"]
+else:
+    history = []
+
+# convert history to api readable format (types.Content list)
+conv_text_list = []
+if history:
+    for message in history:
+        conv_text = types.Content(
+            role = message['role'],
+            parts = [types.Part.from_text(message['text'])]
+        )
+
+        conv_text_list.append(conv_text)
+
+# create chat with api
+chat = client.chats.create(model = "gemini-2.5-flash",
+                           history=conv_text_list, 
+                           config=types.GenerateContentConfig(system_instruction=system_prompt)
+                           )
+
+# function to get response from chat and update history
+def get_response(prompt):
+    chunked_response = chat.send_message_stream(prompt)
+    response = ""
+    for chunk in chunked_response:
+        response += chunk.text
+    if response.strip() == "IGNORE":
+        return None
+    upd_history = []
+    for content in chat.get_history():
+        upd_history += [{'role':content.role, 'text':content.parts[0].text}]
+    upd_date = datetime.date.today().isoformat()
+
+    upd_data = {'date':upd_date, 'history':upd_history}
+    with open(config.HIST_JSON, 'w') as hist_f:
+        json.dump(upd_data, hist_f)
+    
+    return response
