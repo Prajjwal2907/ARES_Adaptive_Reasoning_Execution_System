@@ -15,7 +15,6 @@ sentence_transformer_model = SentenceTransformer("sentence-transformers/all-Mini
 semantic_memory_coll = None
 procedural_memory_coll = None
 
-profile = {}
 
 def init_memory():
     
@@ -104,7 +103,7 @@ def get_recent_episodes(n):
     return episodes
 
 def retrieve_memories(query, n_results):
-    query_encoded = sentence_transformer_model.encode(query)
+    query_encoded = sentence_transformer_model.encode(query).tolist()
     semantic = semantic_memory_coll.query(query_embeddings = [query_encoded], n_results = n_results)
     procedural = procedural_memory_coll.query(query_embeddings = [query_encoded], n_results = n_results)
     memories = []
@@ -150,5 +149,7 @@ def retrieve_memories(query, n_results):
 
         new_memory = memory + (total_score,)
         scored_memories.append(new_memory)
-
+    
+    scored_memories = sorted(scored_memories, key=lambda x: x[3], reverse=True)
+    return scored_memories[:n_results]
     
