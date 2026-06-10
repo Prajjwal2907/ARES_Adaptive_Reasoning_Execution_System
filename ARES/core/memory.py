@@ -104,28 +104,35 @@ def get_recent_episodes(n):
 
 def retrieve_memories(query, n_results):
     query_encoded = sentence_transformer_model.encode(query).tolist()
-    semantic = semantic_memory_coll.query(query_embeddings = [query_encoded], n_results = n_results)
-    procedural = procedural_memory_coll.query(query_embeddings = [query_encoded], n_results = n_results)
     memories = []
-    documents_sem = semantic['documents'][0]
-    metadatas_sem = semantic['metadatas'][0]
-    distances_sem = semantic['distances'][0]
 
-    for i in range(len(documents_sem)):
-        doc = documents_sem[i]
-        meta = metadatas_sem[i]
-        dist = distances_sem[i]
-        memories.append((doc, meta, dist))
+    semantic_c = semantic_memory_coll.count()
+    if semantic_c:
+        n_sem = min(n_results, semantic_c)
+        semantic = semantic_memory_coll.query(query_embeddings = [query_encoded], n_results = n_sem)
+        documents_sem = semantic['documents'][0]
+        metadatas_sem = semantic['metadatas'][0]
+        distances_sem = semantic['distances'][0]
+
+        for i in range(len(documents_sem)):
+            doc = documents_sem[i]
+            meta = metadatas_sem[i]
+            dist = distances_sem[i]
+            memories.append((doc, meta, dist))
     
-    documents_proc = procedural['documents'][0]
-    metadatas_proc = procedural['metadatas'][0]
-    distances_proc = procedural['distances'][0]
+    procedural_c = procedural_memory_coll.count()
+    if procedural_c:
+        n_proc = min(n_results, procedural_c)
+        procedural = procedural_memory_coll.query(query_embeddings = [query_encoded], n_results = n_proc)
+        documents_proc = procedural['documents'][0]
+        metadatas_proc = procedural['metadatas'][0]
+        distances_proc = procedural['distances'][0]
 
-    for i in range(len(documents_proc)):
-        doc = documents_proc[i]
-        meta = metadatas_proc[i]
-        dist = distances_proc[i]
-        memories.append((doc, meta, dist))
+        for i in range(len(documents_proc)):
+            doc = documents_proc[i]
+            meta = metadatas_proc[i]
+            dist = distances_proc[i]
+            memories.append((doc, meta, dist))
     
     scored_memories = []
     for memory in memories:
