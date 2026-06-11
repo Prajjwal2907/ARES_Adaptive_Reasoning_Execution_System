@@ -15,9 +15,10 @@ sentence_transformer_model = SentenceTransformer("sentence-transformers/all-Mini
 semantic_memory_coll = None
 procedural_memory_coll = None
 
-
-def init_memory():
-    
+gemini_client = None
+def init_memory(client):
+    global gemini_client
+    gemini_client = client
     cur = conn.cursor()
     cur.execute('''CREATE TABLE IF NOT EXISTS profile(
                 field TEXT PRIMARY KEY,
@@ -55,8 +56,11 @@ def update_profile(field, val):
 
 def store_instruction(instruction):
     cur = conn.cursor()
-    cur.execute("INSERT INTO instructions(date_passed, instruction, valid) VALUES (?, ?, ?)", (datetime.datetime.now().isoformat(), instruction, 1))
-    conn.commit()
+    cur.execute("SELECT COUNT(*) FROM instructions WHERE instruction = ? AND valid = 1", (instruction,))
+    count = cur.fetchone()[0]
+    if not count:
+        cur.execute("INSERT INTO instructions(date_passed, instruction, valid) VALUES (?, ?, ?)", (datetime.datetime.now().isoformat(), instruction, 1))
+        conn.commit()
 
 def store_episode(summary,turncount):
     cur = conn.cursor()
@@ -65,12 +69,65 @@ def store_episode(summary,turncount):
 
 def store_semantic(text, metadata):
     encoded_text = sentence_transformer_model.encode(text).tolist()
-    semantic_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
-
+    
+    if semantic_memory_coll.count() > 0:
+        similar = semantic_memory_coll.query(
+            query_embeddings=[encoded_text],
+            n_results=1
+        )
+        
+        existing_text = similar['documents'][0][0]
+        existing_distance = similar['distances'][0][0]
+        existing_id = similar['ids'][0][0]
+        
+        if existing_distance < 0.10:
+            if check_contradiction(text, existing_text):
+                temporal_qualifiers = ['today', 'this week', 'for now', 'temporarily', 'right now', 'at the moment']
+                is_temporary = any(qualifier in text.lower() for qualifier in temporal_qualifiers)
+                
+                if is_temporary:
+                    metadata['memory_type'] = 'temporary'
+                else:
+                    semantic_memory_coll.delete(ids=[existing_id])
+                semantic_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+        elif existing_distance < 0.25:
+            semantic_memory_coll.delete(ids=[existing_id])
+            semantic_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+        else:
+            semantic_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+    else:
+            semantic_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
 
 def store_procedural(text, metadata):
     encoded_text = sentence_transformer_model.encode(text).tolist()
-    procedural_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+    
+    if procedural_memory_coll.count() > 0:
+        similar = procedural_memory_coll.query(
+            query_embeddings=[encoded_text],
+            n_results=1
+        )
+        
+        existing_text = similar['documents'][0][0]
+        existing_distance = similar['distances'][0][0]
+        existing_id = similar['ids'][0][0]
+        
+        if existing_distance < 0.10:
+            if check_contradiction(text, existing_text):
+                temporal_qualifiers = ['today', 'this week', 'for now', 'temporarily', 'right now', 'at the moment']
+                is_temporary = any(qualifier in text.lower() for qualifier in temporal_qualifiers)
+                
+                if is_temporary:
+                    metadata['memory_type'] = 'temporary'
+                else:
+                    procedural_memory_coll.delete(ids=[existing_id])
+                procedural_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+        elif existing_distance < 0.25:
+            procedural_memory_coll.delete(ids=[existing_id])
+            procedural_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+        else:
+            procedural_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
+    else:
+            procedural_memory_coll.add(documents = [text], metadatas = [metadata], embeddings = [encoded_text], ids = [str(uuid.uuid4())])
 
 def get_profile():
     profile = {}
@@ -140,7 +197,7 @@ def retrieve_memories(query, n_results, recent_context = ""):
 
         semantic_score = (1 - memory[2]) * 0.35
 
-        recency = ((datetime.datetime.now() - datetime.datetime.fromisoformat(memory[1]['timestamp'])).days)
+        recency = ((datetime.datetime.now() - datetime.datetime.fromisoformat(memory[1]['timestamp']).replace(tzinfo=None)).days)
         
         if recency < 1:
             recency_score = 1 * 0.3
@@ -177,3 +234,14 @@ def retrieve_memories(query, n_results, recent_context = ""):
     scored_memories = sorted(scored_memories, key=lambda x: x[3], reverse=True)
     return scored_memories[:n_results]
     
+
+def check_contradiction(new_text, existing_text):
+    prompt = f"Do the two given texts:\n Text 1:{new_text}\nText 2: {existing_text}\n contradict each other. Answer in a single word as \'yes\' or \'no\'. Do not include anything else in your response. No explanation, no extra words. Only Yes or No"
+    response = gemini_client.models.generate_content(model=config.GEMINI_MODEL,
+                                                    contents = prompt
+                                                    )
+    
+    if response.text.strip().lower() == "yes":
+        return True
+    else:
+        return False

@@ -35,7 +35,7 @@ Return only the JSON object below. No explanation, no preamble, no markdown code
 }
 
 Extraction rules:
-- profile_updates: only extract genuinely profile-level facts — the user's name, how they wish to be addressed. Do not put preferences or opinions here.
+- profile_updates: only extract genuinely profile-level facts — the user's name, how they wish to be addressed. Do not put preferences or opinions here.(only name and address_as fields are valid. Everything else goes to semantic_facts)
 - standing_instructions: only extract explicit behavioural rules the user has stated for how ARES should operate going forward.
 - episodic_summary: write one concise paragraph covering the key topics, decisions, and outcomes of the conversation.
 - semantic_facts: extract individual facts about the user — preferences, opinions, projects, tools they use, things they like or dislike. Each fact must be one standalone sentence.

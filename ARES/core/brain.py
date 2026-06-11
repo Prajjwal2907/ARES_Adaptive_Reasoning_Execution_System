@@ -20,6 +20,8 @@ with open(config.MEMORY_EXTRACT_PROMPT, "r") as memory_prompt_file:
 # start gemini client
 client = genai.Client(api_key = GEMINI_API_KEY)
 
+memory.init_memory(client)
+
 def extract_store(history, date):
     conversation = []
     conversation.append(f"Date: {date}")
@@ -76,7 +78,7 @@ if history:
     for message in history:
         conv_text = types.Content(
             role = message['role'],
-            parts = [types.Part.from_text(message['text'])]
+            parts = [types.Part.from_text(text=message['text'])]
         )
 
         conv_text_list.append(conv_text)

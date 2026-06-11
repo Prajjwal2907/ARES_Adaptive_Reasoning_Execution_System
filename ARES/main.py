@@ -16,5 +16,4 @@ from core import brain
 from core import memory
 from core import listener
 
-memory.init_memory()
 listener.listen(listener.aud_stream)
