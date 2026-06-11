@@ -62,6 +62,8 @@ if os.path.exists(config.HIST_JSON):
     with open(config.HIST_JSON, 'r') as hist_f:
         hist_data = json.load(hist_f)
         if not hist_data["date"] == datetime.date.today().isoformat():
+            if hist_data['history']:
+                extract_store(hist_data['history'], hist_data['date'])
             history = []
         else:
             history = hist_data["history"]
@@ -86,19 +88,53 @@ chat = client.chats.create(model = config.GEMINI_MODEL,
                            )
 
 # function to get response from chat and update history
+clean_history = history
 def get_response(prompt):
-    chunked_response = chat.send_message_stream(prompt)
+    # build memory context
+    context_parts = []
+
+    profile = memory.get_profile()
+    if profile:
+        profile_str = ", ".join([f"{k} = {v}" for k, v in profile.items() if v])
+        if profile_str:
+            context_parts.append(f"Profile: {profile_str}")
+
+    instructions = memory.get_instructions()
+    if instructions:
+        inst_str = " / ".join(instructions)
+        context_parts.append(f"Standing Instructions: {inst_str}")
+
+    episodes = memory.get_recent_episodes(3)
+    if episodes:
+        ep_str = " | ".join([f"{ep[0]}: {ep[1]}" for ep in episodes])
+        context_parts.append(f"Recent Activity: {ep_str}")
+
+    relevant = memory.retrieve_memories(prompt, 5)
+    if relevant:
+        mem_str = " / ".join([m[0] for m in relevant])
+        context_parts.append(f"Relevant Memories: {mem_str}")
+
+    # create full prompt using memory
+    if context_parts:
+        memory_context = "[MEMORY CONTEXT]\n" + "\n".join(context_parts) + "\n\n[USER MESSAGE]\n"
+        full_prompt = memory_context + prompt
+    else:
+        full_prompt = prompt
+
+    # pass full prompt and get response
+    chunked_response = chat.send_message_stream(full_prompt)
     response = ""
     for chunk in chunked_response:
         response += chunk.text
     if response.strip() == "IGNORE":
         return None
-    upd_history = []
-    for content in chat.get_history():
-        upd_history += [{'role':content.role, 'text':content.parts[0].text}]
+    
+    clean_history.append({'role': "user", "text":prompt})
+    clean_history.append({'role': "model", "text":response})
+    
     upd_date = datetime.date.today().isoformat()
 
-    upd_data = {'date':upd_date, 'history':upd_history}
+    upd_data = {'date':upd_date, 'history':clean_history}
     with open(config.HIST_JSON, 'w') as hist_f:
         json.dump(upd_data, hist_f)
     
