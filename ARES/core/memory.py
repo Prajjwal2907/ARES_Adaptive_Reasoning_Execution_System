@@ -102,7 +102,7 @@ def get_recent_episodes(n):
 
     return episodes
 
-def retrieve_memories(query, n_results):
+def retrieve_memories(query, n_results, recent_context = ""):
     query_encoded = sentence_transformer_model.encode(query).tolist()
     memories = []
 
@@ -113,7 +113,7 @@ def retrieve_memories(query, n_results):
         documents_sem = semantic['documents'][0]
         metadatas_sem = semantic['metadatas'][0]
         distances_sem = semantic['distances'][0]
-
+        
         for i in range(len(documents_sem)):
             doc = documents_sem[i]
             meta = metadatas_sem[i]
@@ -134,25 +134,42 @@ def retrieve_memories(query, n_results):
             dist = distances_proc[i]
             memories.append((doc, meta, dist))
     
+
     scored_memories = []
     for memory in memories:
+
         semantic_score = (1 - memory[2]) * 0.35
+
         recency = ((datetime.datetime.now() - datetime.datetime.fromisoformat(memory[1]['timestamp'])).days)
+        
         if recency < 1:
             recency_score = 1 * 0.3
+
         elif 1 <= recency < 7:
             recency_score = 0.85 * 0.3
+
         elif 7 <= recency < 30:
             recency_score = 0.65 * 0.3
+
         elif 30 <= recency < 90:
             recency_score = 0.45 * 0.3
+
         elif 90 <= recency < 180:
             recency_score = 0.30 * 0.3
+
         elif 180 <= recency:
             recency_score = 0.15 * 0.3
+
         importance_score = memory[1]['importance'] / 10 * 0.2
 
-        total_score = semantic_score + recency_score + importance_score
+        continuity_score = 0
+        if recent_context:
+            tags = memory[1]['tags'].split(',')
+            for tag in tags:
+                if tag.strip() in recent_context.lower():
+                    continuity_score = 0.15
+                    break
+        total_score = semantic_score + recency_score + importance_score + continuity_score
 
         new_memory = memory + (total_score,)
         scored_memories.append(new_memory)

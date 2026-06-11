@@ -109,7 +109,10 @@ def get_response(prompt):
         ep_str = " | ".join([f"{ep[0]}: {ep[1]}" for ep in episodes])
         context_parts.append(f"Recent Activity: {ep_str}")
 
-    relevant = memory.retrieve_memories(prompt, 5)
+    recent_conversation = "" 
+    for conv in clean_history[-6:]:
+        recent_conversation += conv['text']
+    relevant = memory.retrieve_memories(prompt, 5, recent_conversation)
     if relevant:
         mem_str = " / ".join([m[0] for m in relevant])
         context_parts.append(f"Relevant Memories: {mem_str}")
