@@ -3,4 +3,3 @@ ARES_env/
 data/
 __pycache__/
 *.pyc
-ARES/test.py
