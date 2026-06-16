@@ -5,12 +5,14 @@ import config
 import datetime
 from google.genai import types
 from assets.local import local_path
+from .client import client
 permissions = {
     "open_application":"SAFE",
     "delete_file":"SENSITIVE"
 }
 
 conn = sqlite3.connect(config.ACTION_DB)
+
 
 def init_action_log():
     cur = conn.cursor()
@@ -36,7 +38,6 @@ def log_action(action_name, parameters, permission_level, status, result_or_erro
     conn.commit()
 
 def _open_application(app_name):
-    action_prompt = f"open application {app_name}"
     try:
         for app_path_name in local_path.APP_PATHS:
             if app_name.lower() in app_path_name:
@@ -52,11 +53,20 @@ def _open_application(app_name):
     except Exception as e:
         return ("fail", "Error..." + str(e))
     
+ares_tools = types.FunctionDeclaration.from_callable(client=client, callable=_open_application)
+
 def execute_action(action_name, parameters):
     if action_name in permissions:
         if permissions[action_name] == 'BLOCKED':
             log_action(action_name, parameters, permissions[action_name], 'BLOCKED', None)
             return "Action blocked..."
+        elif permissions[action_name] == 'SENSITIVE':
+            confirmation = input(f"Requesting permission to {action_name} with parameters {parameters}?(yes/no)")
+            if confirmation.lower() == 'yes':
+                pass
+            else:
+                log_action(action_name, parameters, permissions[action_name], 'DENIED', None)
+                return "Permission denied..."
     else:
         return f"Cannot do {action_name}"
     

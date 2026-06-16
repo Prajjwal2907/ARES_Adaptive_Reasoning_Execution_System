@@ -5,10 +5,9 @@ from google import genai
 from google.genai import types
 import config
 from . import memory
-
+from .client import client
 # get api key from .env
-load_dotenv()
-GEMINI_API_KEY = os.getenv("GOOGLE_API_KEY")
+
 
 # get system prompt
 with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
@@ -18,7 +17,6 @@ with open(config.MEMORY_EXTRACT_PROMPT, "r") as memory_prompt_file:
     memory_extract_prompt = memory_prompt_file.read()
 
 # start gemini client
-client = genai.Client(api_key = GEMINI_API_KEY)
 
 memory.init_memory(client)
 
