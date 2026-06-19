@@ -1,3 +1,5 @@
+import json
+import subprocess
 import os
 import win32com.client
 
@@ -26,5 +28,11 @@ def build_app_path():
                     exe_path = win_client.CreateShortcut(file_path).Targetpath
                     if exe_path and exe_path.lower().endswith(".exe"):
                         APP_PATHS[file[:-4].lower()] = exe_path
-
+    result = subprocess.run(["powershell", "-Command", "Get-StartApps | ConvertTo-Json"],
+    capture_output=True,
+    text=True)
+    apps = json.loads(result.stdout)
+    for app in apps:
+        if "!" in app["AppID"]:
+            APP_PATHS[app["Name"].lower()] = app["AppID"]
 build_app_path()

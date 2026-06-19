@@ -6,8 +6,7 @@ from google.genai import types
 import config
 from . import memory
 from .client import client
-# get api key from .env
-
+from . import actions
 
 # get system prompt
 with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
@@ -16,9 +15,10 @@ with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
 with open(config.MEMORY_EXTRACT_PROMPT, "r") as memory_prompt_file:
     memory_extract_prompt = memory_prompt_file.read()
 
-# start gemini client
 
 memory.init_memory(client)
+actions.init_action_log()
+
 
 def extract_store(history, date):
     conversation = []
@@ -84,11 +84,13 @@ if history:
 # create chat with api
 chat = client.chats.create(model = config.GEMINI_MODEL,
                            history=conv_text_list, 
-                           config=types.GenerateContentConfig(system_instruction=system_prompt)
+                           config=types.GenerateContentConfig(system_instruction=system_prompt,
+                                                              tools = [actions.ares_tools])
                            )
 
 # function to get response from chat and update history
 clean_history = history
+
 def get_response(prompt):
     # build memory context
     context_parts = []
@@ -125,13 +127,18 @@ def get_response(prompt):
         full_prompt = prompt
 
     # pass full prompt and get response
-    chunked_response = chat.send_message_stream(full_prompt)
-    response = ""
-    for chunk in chunked_response:
-        response += chunk.text
-    if response.strip() == "IGNORE":
-        return None
+    response_object = chat.send_message(full_prompt)
+    response = response_object.text
+    if response:
+        if response.strip() == "IGNORE":
+            return None
     
+    for part in response_object.parts:
+        if part.function_call:
+            result = actions.execute_action(part.function_call.name, part.function_call.args)
+            response_object = chat.send_message(types.Part.from_function_response(name=part.function_call.name, response={"result": result}))
+            response = response_object.text
+
     clean_history.append({'role': "user", "text":prompt})
     clean_history.append({'role': "model", "text":response})
     
