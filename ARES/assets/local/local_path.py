@@ -4,8 +4,8 @@ import os
 import win32com.client
 
 APP_PATHS = {}
-
 RESTRICTED_PATHS = []
+DEFAULT_BROWSER = "Google Chrome"
 
 user_search_path = os.path.join(os.path.expanduser("~"), "AppData", "Roaming", "Microsoft", "Windows", "Start Menu", "Programs")
 system_search_path = os.path.join(os.environ.get("PROGRAMDATA"), "Microsoft", "Windows", "Start Menu", "Programs")

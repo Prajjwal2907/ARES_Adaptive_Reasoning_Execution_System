@@ -17,7 +17,8 @@ WAKEWORD_MODEL = r"ARES\assets\ares.onnx"
 SENSITIVITY = 0.4
 
 # Google api model
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-3.1-flash-lite-preview"
+
 #Hotkeys
 HOTKEY = "ctrl + space"
 

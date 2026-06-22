@@ -133,14 +133,24 @@ def get_response(prompt):
         if response.strip() == "IGNORE":
             return None
     
-    for part in response_object.parts:
-        if part.function_call:
-            result = actions.execute_action(part.function_call.name, part.function_call.args)
-            response_object = chat.send_message(types.Part.from_function_response(name=part.function_call.name, response={"result": result}))
-            response = response_object.text
+    function_calls = [part for part in response_object.parts if part.function_call]
+
+    if function_calls:
+        function_responses = []
+        for fc in function_calls:
+            result = actions.execute_action(fc.function_call.name, fc.function_call.args)
+            function_responses.append(
+                types.Part.from_function_response(
+                    name=fc.function_call.name,
+                    response={"result": result}
+                )
+            )
+        response_object = chat.send_message(function_responses)
+        response = response_object.text
 
     clean_history.append({'role': "user", "text":prompt})
-    clean_history.append({'role': "model", "text":response})
+    if response:
+        clean_history.append({'role': "model", "text":response})
     
     upd_date = datetime.date.today().isoformat()
 
