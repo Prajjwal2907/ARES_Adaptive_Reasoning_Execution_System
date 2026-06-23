@@ -11,7 +11,8 @@ from pathlib import Path
 from docx import Document
 from openpyxl import Workbook
 from pptx import Presentation
-
+import pypdf, docx, openpyxl, pptx
+import psutil
 permissions = {
     "open_application":"SAFE",
     "focus_application":"SAFE",
@@ -19,7 +20,18 @@ permissions = {
     "close_application":"SENSITIVE",
     "browser_new_tab":"SAFE",
     "browser_close_tab":"SENSITIVE",
-    "search_browser":"SENSITIVE"
+    "search_browser":"SENSITIVE",
+    "create_file":"SAFE",
+    "create_folder":"SAFE",
+    "delete_file":"SENSITIVE",
+    "move_copy_file":"SENSITIVE",
+    "rename_file":"SAFE",
+    "search_files":"SAFE",
+    "read_file":"SAFE",
+    "write_file":"SENSITIVE",
+    "get_system_status":"SAFE",
+    "volume_control":"SAFE",
+    "brightness_control":"SAFE"
 }
 
 
@@ -161,8 +173,339 @@ def _search_browser(query):
     except Exception as e:
         return ("fail", str(e))
     
-# def _create_file(filename, content):
+def _create_file(filename, file_type):
+    try:
+        file_type = file_type.lower()
+        
+        if file_type == "word":
+            full_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename + ".docx")
+            if not _is_path_allowed(full_path, local_path.ALLOWED_WRITE_PATHS):
+                return ("fail", "Path not allowed.")
+            doc = Document()
+            doc.save(full_path)
+            
+        elif file_type == "excel":
+            full_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename + ".xlsx")
+            if not _is_path_allowed(full_path, local_path.ALLOWED_WRITE_PATHS):
+                return ("fail", "Path not allowed.")
+            wb = Workbook()
+            wb.save(full_path)
+            
+        elif file_type == "powerpoint":
+            full_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename + ".pptx")
+            if not _is_path_allowed(full_path, local_path.ALLOWED_WRITE_PATHS):
+                return ("fail", "Path not allowed.")
+            prs = Presentation()
+            prs.save(full_path)
+            
+        else:
+            full_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename + "." + file_type)
+            if not _is_path_allowed(full_path, local_path.ALLOWED_WRITE_PATHS):
+                return ("fail", "Path not allowed.")
+            Path(full_path).write_text("")
+            
+        return ("success", f"{filename} created at {full_path}")
+    except Exception as e:
+        return ("fail", str(e))
 
+
+def _create_folder(folder_name):
+    try:
+        path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], folder_name)
+        if not _is_path_allowed(path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Path not allowed.")
+        os.makedirs(path, exist_ok=True)
+        return ("success", f"{folder_name} folder created.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+
+def _delete_file(file_name, type, file_type=""):
+    try:
+        if type == "file":
+            path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{file_name}.{file_type}')
+        elif type == "folder":
+            path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], file_name)
+        else:
+            return ("fail", "Invalid type. Must be 'file' or 'folder'.")
+        
+        if not _is_path_allowed(path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Path not allowed.")
+        
+        if type == "file":
+            if os.path.isfile(path):
+                os.remove(path)
+                return ("success", f"{file_name}.{file_type} deleted.")
+            else:
+                return ("fail", "File not found.")
+        elif type == "folder":
+            if os.path.isdir(path):
+                shutil.rmtree(path)
+                return ("success", f"{file_name} folder deleted.")
+            else:
+                return ("fail", "Folder not found.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+
+def _move_copy_file(file_name, destination, operation, type, file_type=""):
+    try:
+        if type == "file":
+            source_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{file_name}.{file_type}')
+        elif type == "folder":
+            source_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], file_name)
+        
+        dest_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], destination)
+        
+        if not _is_path_allowed(source_path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Source path not allowed.")
+        if not _is_path_allowed(dest_path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Destination path not allowed.")
+        
+        if operation == "move":
+            shutil.move(source_path, dest_path)
+            return ("success", f"{file_name} moved to {destination}.")
+        elif operation == "copy":
+            if type == "file":
+                shutil.copy(source_path, dest_path)
+            elif type == "folder":
+                shutil.copytree(source_path, dest_path)
+            return ("success", f"{file_name} copied to {destination}.")
+        else:
+            return ("fail", "Invalid operation. Must be 'move' or 'copy'.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+def _rename_file(file_name, new_name, type, file_type=""):
+    try:
+        if type == "file":
+            source_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{file_name}.{file_type}')
+            dest_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{new_name}.{file_type}')
+        elif type == "folder":
+            source_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], file_name)
+            dest_path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], new_name)
+        else:
+            return ("fail", "Invalid type. Must be 'file' or 'folder'.")
+        
+        if not _is_path_allowed(source_path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Source path not allowed.")
+        if not _is_path_allowed(dest_path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Destination path not allowed.")
+        
+        os.rename(source_path, dest_path)
+        return ("success", f"{file_name} renamed to {new_name}.")
+    except Exception as e:
+        return ("fail", str(e))
+
+def _search_files(query, search_by):
+    try:
+        results = []
+        for dirpath, dirnames, files in os.walk(local_path.ALLOWED_WRITE_PATHS[0]):
+            if search_by == "name":
+                for file in files:
+                    if query.lower() in file.lower():
+                        results.append(os.path.join(dirpath, file))
+                for dirname in dirnames:
+                    if query.lower() in dirname.lower():
+                        results.append(os.path.join(dirpath, dirname))
+            
+            elif search_by == "type":
+                for file in files:
+                    if file.lower().endswith(f".{query.lower()}"):
+                        results.append(os.path.join(dirpath, file))
+            
+            elif search_by == "content":
+                for file in files:
+                    file_path = os.path.join(dirpath, file)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8') as f:
+                            if query.lower() in f.read().lower():
+                                results.append(file_path)
+                    except:
+                        pass
+            else:
+                return ("fail", "Invalid search_by. Must be 'name', 'type', or 'content'.")
+        
+        if results:
+            return ("success", f"Found {len(results)} result(s):\n" + "\n".join(results))
+        else:
+            return ("success", "No results found.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+
+def _read_file(file_name, file_type):
+    try:
+        path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{file_name}.{file_type}')
+        
+        if not _is_path_allowed(path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Path not allowed.")
+        
+        if file_type == "docx":
+            doc = Document(path)
+            text = "\n".join([para.text for para in doc.paragraphs])
+            
+        elif file_type == "xlsx":
+            wb = openpyxl.load_workbook(path)
+            text = ""
+            for sheet in wb.sheetnames:
+                ws = wb[sheet]
+                for row in ws.iter_rows(values_only=True):
+                    text += " | ".join([str(cell) for cell in row if cell is not None]) + "\n"
+                    
+        elif file_type == "pdf":
+            reader = pypdf.PdfReader(path)
+            text = ""
+            for page in reader.pages:
+                text += page.extract_text() + "\n"
+                
+        else:
+            with open(path, 'r', encoding='utf-8') as f:
+                text = f.read()
+        
+        return ("success", text)
+    except Exception as e:
+        return ("fail", str(e))
+
+def _write_file(file_name, file_type, content, mode="write"):
+    print(f"_write_file called: file={file_name}.{file_type}, mode={mode}, content={content}")
+    try:
+        path = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], f'{file_name}.{file_type}')
+        
+        if not _is_path_allowed(path, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Path not allowed.")
+        
+        if file_type == "docx":
+            if mode == "write" or not os.path.exists(path):
+                doc = Document()
+            else:
+                doc = Document(path)
+                print(f"Existing paragraphs: {len(doc.paragraphs)}")
+                doc.add_paragraph(content)
+                print(f"Paragraphs after add: {len(doc.paragraphs)}")
+                doc.save(path)
+            
+            
+        elif file_type == "xlsx":
+            if os.path.exists(path):
+                wb = openpyxl.load_workbook(path)
+                ws = wb.active
+            else:
+                wb = Workbook()
+                ws = wb.active
+            if mode == "write":
+                ws.delete_rows(1, ws.max_row)
+            next_row = ws.max_row + 1
+            ws.append([content])
+            wb.save(path)
+            
+        elif file_type == "pdf":
+            return ("fail", "PDF files cannot be edited directly.")
+        
+        else:
+            file_mode = 'w' if mode == "write" else 'a'
+            with open(path, file_mode, encoding='utf-8') as f:
+                f.write(content)
+        
+        return ("success", f"{file_name}.{file_type} updated.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+def _get_system_status(metric="all"):
+    try:
+        if metric == "cpu":
+            cpu = psutil.cpu_percent(interval=1)
+            return ("success", f"CPU usage is at {cpu} percent.")
+        
+        elif metric == "ram":
+            ram = psutil.virtual_memory()
+            used = round(ram.used / (1024**3), 1)
+            total = round(ram.total / (1024**3), 1)
+            return ("success", f"RAM usage is {used}GB out of {total}GB, at {ram.percent} percent.")
+        
+        elif metric == "battery":
+            battery = psutil.battery()
+            if battery is None:
+                return ("success", "No battery detected — running on desktop power.")
+            status = "charging" if battery.power_plugged else "not charging"
+            return ("success", f"Battery at {round(battery.percent)} percent, {status}.")
+        
+        elif metric == "network":
+            net = psutil.net_io_counters()
+            sent = round(net.bytes_sent / (1024**2), 1)
+            recv = round(net.bytes_recv / (1024**2), 1)
+            return ("success", f"Network — {sent}MB sent, {recv}MB received since last boot.")
+        
+        elif metric == "temperature":
+            temps = psutil.sensors_temperatures()
+            if not temps:
+                return ("success", "Temperature sensors not available on this system.")
+            readings = []
+            for name, entries in temps.items():
+                for entry in entries:
+                    readings.append(f"{entry.label or name}: {entry.current}°C")
+            return ("success", "Temperatures — " + ", ".join(readings))
+        
+        elif metric == "all":
+            cpu = psutil.cpu_percent(interval=1)
+            ram = psutil.virtual_memory()
+            battery = psutil.battery()
+            net = psutil.net_io_counters()
+            
+            ram_used = round(ram.used / (1024**3), 1)
+            ram_total = round(ram.total / (1024**3), 1)
+            net_sent = round(net.bytes_sent / (1024**2), 1)
+            net_recv = round(net.bytes_recv / (1024**2), 1)
+            
+            summary = f"CPU at {cpu}%. RAM {ram_used}GB of {ram_total}GB ({ram.percent}%). "
+            
+            if battery:
+                status = "charging" if battery.power_plugged else "not charging"
+                summary += f"Battery at {round(battery.percent)}%, {status}. "
+            
+            summary += f"Network — {net_sent}MB sent, {net_recv}MB received."
+            return ("success", summary)
+        
+        else:
+            return ("fail", "Invalid metric. Use cpu, ram, battery, network, temperature, or all.")
+    
+    except Exception as e:
+        return ("fail", str(e))
+    
+def _volume_control(action, level=None):
+    try:
+        from pycaw.pycaw import AudioUtilities
+
+        device = AudioUtilities.GetSpeakers()
+        volume = device.EndpointVolume
+
+        if action == "get":
+            current = round(volume.GetMasterVolumeLevelScalar() * 100)
+            return ("success", f"Volume is at {current} percent.")
+        elif action == "set":
+            volume.SetMasterVolumeLevelScalar(level / 100, None)
+            return ("success", f"Volume set to {level} percent.")
+        else:
+            return ("fail", "Invalid action. Must be 'get' or 'set'.")
+    except Exception as e:
+        print(f"Volume error: {str(e)}")
+        return ("fail", str(e))
+
+def _brightness_control(action, level=None):
+    try:
+        import screen_brightness_control as sbc
+        
+        if action == "get":
+            current = sbc.get_brightness()[0]
+            return ("success", f"Screen brightness is at {current} percent.")
+        elif action == "set":
+            sbc.set_brightness(level)
+            return ("success", f"Brightness set to {level} percent.")
+        else:
+            return ("fail", "Invalid action. Must be 'get' or 'set'.")
+    except Exception as e:
+        return ("fail", str(e))
+    
 _actions = {
     "open_application":_open_application,
     "focus_application":_focus_application,
@@ -170,7 +513,18 @@ _actions = {
     "close_application":_close_application,
     "browser_new_tab":_browser_new_tab,
     "browser_close_tab":_browser_close_tab,
-    "search_browser":_search_browser
+    "search_browser":_search_browser,
+    "create_file":_create_file,
+    "create_folder":_create_folder,
+    "delete_file":_delete_file,
+    "move_copy_file":_move_copy_file,
+    "rename_file":_rename_file,
+    "search_files":_search_files,
+    "read_file":_read_file,
+    "write_file":_write_file,
+    "get_system_status":_get_system_status,
+    "volume_control":_volume_control,
+    "brightness_control":_brightness_control
 }
 
 _action_declarations = [types.FunctionDeclaration(name="open_application", 
@@ -255,6 +609,217 @@ _action_declarations = [types.FunctionDeclaration(name="open_application",
                                                           )
                                                       },
                                                       required=["query"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="create_file",
+                                                  description="Creates a new empty file in the ARES workspace folder. Use this when the user asks to create a file, document, spreadsheet, presentation, or code file.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "filename": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file to create, without extension."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The type of file to create. Use 'word' for .docx, 'excel' for .xlsx, 'powerpoint' for .pptx, or any file extension like 'py', 'cpp', 'txt' for plain text files."
+                                                          )
+                                                      },
+                                                      required=["filename", "file_type"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="create_folder",
+                                                  description="Creates a new folder in the ARES workspace folder. Use this when the user asks to create a folder or directory.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "folder_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the folder to create."
+                                                          )
+                                                      },
+                                                      required=["folder_name"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="delete_file",
+                                                  description="Deletes a file or folder from the ARES workspace folder. Use this when the user asks to delete or remove a file or folder.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "file_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file or folder to delete, without extension."
+                                                          ),
+                                                          "type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="Whether to delete a file or folder. Must be exactly 'file' or 'folder'."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The file extension without the dot, for example 'py', 'docx'. Only required when type is 'file', omit for folders."
+                                                          )
+                                                      },
+                                                      required=["file_name", "type"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="move_copy_file",
+                                                  description="Moves or copies a file or folder within the ARES workspace folder. Use this when the user asks to move, copy, or duplicate a file or folder.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "file_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file or folder to move or copy, without extension."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The file extension without the dot, for example 'py', 'docx'. Only required when type is 'file', omit for folders."
+                                                          ),
+                                                          "destination": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The destination folder name within the workspace folder."
+                                                          ),
+                                                          "operation": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The operation to perform. Must be exactly 'move' or 'copy'."
+                                                          ),
+                                                          "type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="Whether the target is a file or folder. Must be exactly 'file' or 'folder'."
+                                                          )
+                                                      },
+                                                      required=["file_name", "destination", "operation", "type"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="rename_file",
+                                                  description="Renames a file or folder in the ARES workspace folder. Use this when the user asks to rename a file or folder.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "file_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The current name of the file or folder, without extension."
+                                                          ),
+                                                          "new_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The new name for the file or folder, without extension."
+                                                          ),
+                                                          "type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="Whether the target is a file or folder. Must be exactly 'file' or 'folder'."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The file extension without the dot, for example 'py', 'docx'. Only required when type is 'file', omit for folders."
+                                                          )
+                                                      },
+                                                      required=["file_name", "new_name", "type"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="search_files",
+                                                  description="Searches for files or folders in the ARES workspace folder by name, type, or content. Use this when the user asks to find or search for a file.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "query": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The search term. For name search use the file name, for type search use the extension without dot like 'py', for content search use the text to find inside files."
+                                                          ),
+                                                          "search_by": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The search method. Must be exactly 'name', 'type', or 'content'."
+                                                          )
+                                                      },
+                                                      required=["query", "search_by"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="read_file",
+                                                  description="Reads and returns the contents of a file in the ARES workspace folder. Use this when the user asks to read, open, or get the contents of a file.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "file_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file to read, without extension."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The file extension without the dot, for example 'py', 'docx', 'pdf', 'xlsx'."
+                                                          )
+                                                      },
+                                                      required=["file_name", "file_type"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="write_file",
+                                                  description="Writes or appends content to a file in the ARES workspace folder. Use this when the user asks to write to, edit, update, or add content to a file.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "file_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file to write to, without extension."
+                                                          ),
+                                                          "file_type": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The file extension without the dot, for example 'py', 'docx', 'txt'."
+                                                          ),
+                                                          "content": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The content to write to the file."
+                                                          ),
+                                                          "mode": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="Whether to overwrite the file or append to it. Must be exactly 'write' or 'append'."
+                                                          )
+                                                      },
+                                                      required=["file_name", "file_type", "content", "mode"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="get_system_status",
+                                                  description="Retrieves system status information including CPU, RAM, battery, network, and temperature. Use this when the user asks about system performance, battery level, memory usage, or hardware status.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "metric": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The metric to retrieve. Must be exactly one of: 'cpu', 'ram', 'battery', 'network', 'temperature', or 'all'. Defaults to 'all' if not specified."
+                                                          )
+                                                      },
+                                                      required=[]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="volume_control",
+                                                  description="Gets or sets the system volume. Use this when the user asks about volume level or asks to change, increase, decrease, mute, or set the volume.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "action": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The action to perform. Must be exactly 'get' or 'set'."
+                                                          ),
+                                                          "level": types.Schema(
+                                                              type=types.Type.INTEGER,
+                                                              description="The volume level to set, from 0 to 100. Only required when action is 'set'."
+                                                          )
+                                                      },
+                                                      required=["action"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="brightness_control",
+                                                  description="Gets or sets the screen brightness. Use this when the user asks about brightness level or asks to change, increase, decrease, or set the screen brightness.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "action": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The action to perform. Must be exactly 'get' or 'set'."
+                                                          ),
+                                                          "level": types.Schema(
+                                                              type=types.Type.INTEGER,
+                                                              description="The brightness level to set, from 0 to 100. Only required when action is 'set'."
+                                                          )
+                                                      },
+                                                      required=["action"]
                                                   )
                                                 )
                         ]
