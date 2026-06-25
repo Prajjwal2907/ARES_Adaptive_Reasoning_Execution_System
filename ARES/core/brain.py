@@ -85,7 +85,7 @@ if history:
 chat = client.chats.create(model = config.GEMINI_MODEL,
                            history=conv_text_list, 
                            config=types.GenerateContentConfig(system_instruction=system_prompt,
-                                                              tools = [actions.ares_tools])
+                                                              tools = [actions.ares_tools,types.Tool(google_search=types.GoogleSearch())])
                            )
 
 # function to get response from chat and update history

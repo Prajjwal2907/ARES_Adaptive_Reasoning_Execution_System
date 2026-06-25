@@ -15,6 +15,12 @@ ALLOWED_READ_PATHS = [user_search_path, system_search_path, os.path.join(os.envi
 if not os.path.exists(os.path.join(os.path.expanduser("~"), "Documents", "ARES_workfolder")):
     os.mkdir(os.path.join(os.path.expanduser("~"), "Documents", "ARES_workfolder"))
 
+WINDOW_TITLE_ALIASES = {
+    "chrome": "Google Chrome",
+    "opera": "Opera GX",
+    "vscode": "Visual Studio Code",
+}
+
 ALLOWED_WRITE_PATHS = [os.path.join(os.path.expanduser("~"), "Documents", "ARES_workfolder")]
 
 def build_app_path():

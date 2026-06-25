@@ -13,6 +13,8 @@ from openpyxl import Workbook
 from pptx import Presentation
 import pypdf, docx, openpyxl, pptx
 import psutil
+import mss
+
 permissions = {
     "open_application":"SAFE",
     "focus_application":"SAFE",
@@ -31,11 +33,16 @@ permissions = {
     "write_file":"SENSITIVE",
     "get_system_status":"SAFE",
     "volume_control":"SAFE",
-    "brightness_control":"SAFE"
+    "brightness_control":"SAFE",
+    "list_processes":"SAFE",
+    "clipboard":"SENSITIVE",
+    "screenshot":"SENSITIVE",
+    "execute_file":"SENSITIVE"
 }
 
 
 conn = sqlite3.connect(config.ACTION_DB)
+
 
 
 def init_action_log():
@@ -94,6 +101,7 @@ def _open_application(app_name):
 def _focus_application(app_name):
     try:
         app = pywinauto.Application(backend = "win32").connect(title_re = f".*{app_name}.*",found_index=0)
+        time.sleep(0.5)
         app.top_window().set_focus()
         return ("success", f"{app_name} focused.")
     except Exception as e:
@@ -101,24 +109,32 @@ def _focus_application(app_name):
     
 def _resize_application(app_name, action):
     try:
-        app = pywinauto.Application(backend = "win32").connect(title_re = f".*{app_name}.*",found_index=0)
+        search_title = local_path.WINDOW_TITLE_ALIASES.get(app_name.lower(), app_name)
+        app = pywinauto.Application(backend="win32").connect(title_re=f".*{search_title}.*", found_index=0)
+        time.sleep(0.5)
         if action.lower() == "minimize":
-            app.top_window().minimize()
+            app.top_window().set_focus()
+            time.sleep(0.3)
+            pyautogui.hotkey('win', 'down')
             return ("success", f"{app_name} minimized.")
 
         elif action.lower() == "maximize":
-            app.top_window().maximize()
+            app.top_window().set_focus()
+            time.sleep(0.3)
+            pyautogui.hotkey('win', 'up')
             return ("success", f"{app_name} maximized.")
         
         elif action.lower() == "left":
-            screen_width, screen_height = pyautogui.size()
-            app.top_window().move_window(x=0, y=0, width=screen_width//2, height=screen_height)
-            return ("success", f"{app_name} moved.")
-        
+            app.top_window().set_focus()
+            time.sleep(0.3)
+            pyautogui.hotkey('win', 'left')
+            return ("success", f"{app_name} snapped to left.")
+
         elif action.lower() == "right":
-            screen_width, screen_height = pyautogui.size()
-            app.top_window().move_window(x=screen_width//2, y=0, width=screen_width//2, height=screen_height)
-            return ("success", f"{app_name} moved.")
+            app.top_window().set_focus()
+            time.sleep(0.3)
+            pyautogui.hotkey('win', 'right')
+            return ("success", f"{app_name} snapped to right.")
         else:
             return ("fail", "invalid action")
     except Exception as e:
@@ -127,6 +143,7 @@ def _resize_application(app_name, action):
 def _close_application(app_name):
     try:
         app = pywinauto.Application(backend = "win32").connect(title_re = f".*{app_name}.*",found_index=0)
+        # time.sleep(0.5)
         app.top_window().close()
         return ("success", f"{app_name} closed.")
     except Exception as e:
@@ -506,6 +523,90 @@ def _brightness_control(action, level=None):
     except Exception as e:
         return ("fail", str(e))
     
+def _list_processes():
+    try:
+        processes = []
+        for proc in psutil.process_iter(['pid', 'name']):
+            try:
+                processes.append(f"{proc.info['name']} (PID: {proc.info['pid']})")
+            except (psutil.NoSuchProcess, psutil.AccessDenied):
+                pass
+        
+        if processes:
+            return ("success", f"Running processes:\n" + "\n".join(processes))
+        else:
+            return ("success", "No processes found.")
+    except Exception as e:
+        return ("fail", str(e))
+    
+def _clipboard(action, text=""):
+    try:
+        if action == "get":
+            content = pyperclip.paste()
+            return ("success", f"Clipboard contains: {content}")
+        elif action == "set":
+            pyperclip.copy(text)
+            return ("success", "Clipboard updated.")
+        else:
+            return ("fail", "Invalid action. Must be 'get' or 'set'.")
+    except Exception as e:
+        return ("fail", str(e))
+
+
+def _screenshot(mode="full", app_name=""):
+    try:
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"screenshot_{timestamp}.png"
+        filepath = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename)
+
+        if mode == "full":
+            with mss.mss() as sct:
+                sct.shot(output=filepath)
+
+        elif mode == "window":
+            app = pywinauto.Application(backend="win32").connect(
+                title_re=f".*{app_name}.*", found_index=0)
+            rect = app.top_window().rectangle()
+            with mss.mss() as sct:
+                monitor = {
+                    "top": rect.top,
+                    "left": rect.left,
+                    "width": rect.width(),
+                    "height": rect.height()
+                }
+                sct.shot(mon=monitor, output=filepath)
+        else:
+            return ("fail", "Invalid mode. Must be 'full' or 'window'.")
+
+        return ("success", f"Screenshot saved to {filepath}")
+    except Exception as e:
+        return ("fail", str(e)) 
+    
+def _execute_file(filename):
+    try:
+        filepath = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename)
+        
+        if not _is_path_allowed(filepath, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "Path not allowed.")
+        
+        if not os.path.exists(filepath):
+            return ("fail", f"{filename} not found in workspace folder.")
+        
+        ext = os.path.splitext(filename)[1].lower()
+        
+        if ext == ".py":
+            subprocess.Popen(["python", filepath])
+        elif ext == ".js":
+            subprocess.Popen(["node", filepath])
+        elif ext in [".bat", ".exe"]:
+            subprocess.Popen([filepath])
+        else:
+            return ("fail", f"File type {ext} is not supported for execution.")
+        
+        return ("success", f"{filename} is now running.")
+    except Exception as e:
+        return ("fail", str(e))
+    
 _actions = {
     "open_application":_open_application,
     "focus_application":_focus_application,
@@ -524,7 +625,11 @@ _actions = {
     "write_file":_write_file,
     "get_system_status":_get_system_status,
     "volume_control":_volume_control,
-    "brightness_control":_brightness_control
+    "brightness_control":_brightness_control,
+    "list_processes":_list_processes,
+    "clipboard":_clipboard,
+    "screenshot":_screenshot,
+    "execute_file":_execute_file
 }
 
 _action_declarations = [types.FunctionDeclaration(name="open_application", 
@@ -820,6 +925,53 @@ _action_declarations = [types.FunctionDeclaration(name="open_application",
                                                           )
                                                       },
                                                       required=["action"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="clipboard",
+                                                  description="Reads from or writes to the system clipboard. Use this when the user asks to copy something to clipboard, paste from clipboard, or check what is in the clipboard.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "action": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The action to perform. Must be exactly 'get' to read clipboard or 'set' to write to clipboard."
+                                                          ),
+                                                          "text": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The text to copy to clipboard. Only required when action is 'set'."
+                                                          )
+                                                      },
+                                                      required=["action"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="screenshot",
+                                                  description="Takes a screenshot of the full screen or a specific application window. Use this when the user asks to take a screenshot or capture the screen.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "mode": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The screenshot mode. Use 'full' for the entire screen or 'window' for a specific application window."
+                                                          ),
+                                                          "app_name": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the application window to capture. Only required when mode is 'window'."
+                                                          )
+                                                      },
+                                                      required=["mode"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="execute_file",
+                                                  description="Executes a file from the ARES workspace folder. Use this when the user asks to run, execute, or start a script or program file.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "filename": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The name of the file to execute, including extension. For example 'script.py' or 'program.exe'. The file must exist in the ARES workspace folder."
+                                                          )
+                                                      },
+                                                      required=["filename"]
                                                   )
                                                 )
                         ]
