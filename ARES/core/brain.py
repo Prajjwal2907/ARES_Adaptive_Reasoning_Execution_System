@@ -85,7 +85,7 @@ if history:
 chat = client.chats.create(model = config.GEMINI_MODEL,
                            history=conv_text_list, 
                            config=types.GenerateContentConfig(system_instruction=system_prompt,
-                                                              tools = [actions.ares_tools,types.Tool(google_search=types.GoogleSearch())])
+                                                              tools = [actions.ares_tools])
                            )
 
 # function to get response from chat and update history
@@ -129,16 +129,18 @@ def get_response(prompt):
     # pass full prompt and get response
     response_object = chat.send_message(full_prompt)
     response = response_object.text
+
     if response:
         if response.strip() == "IGNORE":
             return None
-    
+
     function_calls = [part for part in response_object.parts if part.function_call]
 
-    if function_calls:
+    while function_calls:
         function_responses = []
         for fc in function_calls:
             result = actions.execute_action(fc.function_call.name, fc.function_call.args)
+            
             function_responses.append(
                 types.Part.from_function_response(
                     name=fc.function_call.name,
@@ -147,16 +149,15 @@ def get_response(prompt):
             )
         response_object = chat.send_message(function_responses)
         response = response_object.text
+        function_calls = [part for part in response_object.parts if part.function_call]
 
-    clean_history.append({'role': "user", "text":prompt})
+    clean_history.append({'role': "user", "text": prompt})
     if response:
-        clean_history.append({'role': "model", "text":response})
-    
-    upd_date = datetime.date.today().isoformat()
+        clean_history.append({'role': "model", "text": response})
 
-    upd_data = {'date':upd_date, 'history':clean_history}
+    upd_data = {'date': datetime.date.today().isoformat(), 'history': clean_history}
     with open(config.HIST_JSON, 'w') as hist_f:
         json.dump(upd_data, hist_f)
-    
+
     return response
 

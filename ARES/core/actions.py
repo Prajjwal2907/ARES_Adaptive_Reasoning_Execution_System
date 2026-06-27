@@ -14,6 +14,9 @@ from pptx import Presentation
 import pypdf, docx, openpyxl, pptx
 import psutil
 import mss
+from ddgs import DDGS
+import requests
+from bs4 import BeautifulSoup
 
 permissions = {
     "open_application":"SAFE",
@@ -37,7 +40,10 @@ permissions = {
     "list_processes":"SAFE",
     "clipboard":"SENSITIVE",
     "screenshot":"SENSITIVE",
-    "execute_file":"SENSITIVE"
+    "execute_file":"SENSITIVE",
+    "get_time":"SAFE",
+    "web_search":"SAFE",
+    "scrape_page":"SAFE"
 }
 
 
@@ -607,6 +613,40 @@ def _execute_file(filename):
     except Exception as e:
         return ("fail", str(e))
     
+
+def _get_time():
+    t = datetime.datetime.now().strftime("%d/%m/%Y, %H:%M:%S")
+    return ("success", f"{t} is the current time.")
+
+def _web_search(query):
+    try:
+        with DDGS() as ddgs:
+            results = ddgs.text(query, max_results=3)
+        links = []
+        final_result = ""
+        for result in results:
+            links.append(result['href'])
+        for link in links:
+            page_result = _scrape_page(link,query)
+            if page_result:
+                final_result += page_result
+        return ("success", f"Data extracted from {links}")
+    except Exception as e:
+        return ("fail", str(e))
+
+def _scrape_page(url,question):
+    try:
+        page_response = requests.get(url, timeout=10)
+        html_content = BeautifulSoup(page_response.content,'html.parser')
+        texts = html_content.get_text().split("\n")
+        texts = [text.strip() for text in texts if text.strip()]
+        texts = "\n".join(texts)[:8000]
+        prompt = f"Answer the give question: {question}\n Using the data given:{texts}"
+        response = client.models.generate_content(model=config.GEMINI_MODEL, contents= prompt)
+        return response.text
+    except Exception as e:
+        return None
+    
 _actions = {
     "open_application":_open_application,
     "focus_application":_focus_application,
@@ -629,7 +669,10 @@ _actions = {
     "list_processes":_list_processes,
     "clipboard":_clipboard,
     "screenshot":_screenshot,
-    "execute_file":_execute_file
+    "execute_file":_execute_file,
+    "get_time":_get_time,
+    "web_search":_web_search,
+    "scrape_page":_scrape_page
 }
 
 _action_declarations = [types.FunctionDeclaration(name="open_application", 
@@ -972,6 +1015,43 @@ _action_declarations = [types.FunctionDeclaration(name="open_application",
                                                           )
                                                       },
                                                       required=["filename"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="get_time",
+                                                  description="Returns the current time and date. Use this when the user asks what time it is, what today's date is, or what day of the week it is.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={}
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="web_search",
+                                                  description="Searches the web and returns results for ARES to read internally. Use this only when you need current or real-time information to answer the user's question — such as live prices, recent news, or anything beyond your knowledge cutoff. Do not use this when the user asks to search or look something up — use search_browser for that instead.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "query": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The search query to look up."
+                                                          )
+                                                      },
+                                                      required=["query"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="scrape_page",
+                                                  description="Fetches and reads the content of a specific webpage URL and extracts information from it to answer a question. Use this after web_search returns URLs, when you need to read the actual content of a page to get specific information like prices, details, or data.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "url": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The full URL of the webpage to fetch and read."
+                                                          ),
+                                                          "question": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The specific question to answer from the page content."
+                                                          )
+                                                      },
+                                                      required=["url", "question"]
                                                   )
                                                 )
                         ]
