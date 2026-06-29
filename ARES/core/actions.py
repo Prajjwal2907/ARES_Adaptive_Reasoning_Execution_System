@@ -15,8 +15,9 @@ import pypdf, docx, openpyxl, pptx
 import psutil
 import mss
 from ddgs import DDGS
-import requests
+import requests, base64
 from bs4 import BeautifulSoup
+
 
 permissions = {
     "open_application":"SAFE",
@@ -43,7 +44,9 @@ permissions = {
     "execute_file":"SENSITIVE",
     "get_time":"SAFE",
     "web_search":"SAFE",
-    "scrape_page":"SAFE"
+    "scrape_page":"SAFE",
+    "analyse_screen":"SENSITIVE",
+    "analyse_image_file":"SENSITIVE"
 }
 
 
@@ -584,7 +587,7 @@ def _screenshot(mode="full", app_name=""):
         else:
             return ("fail", "Invalid mode. Must be 'full' or 'window'.")
 
-        return ("success", f"Screenshot saved to {filepath}")
+        return ("success", f"Screenshot saved to={filepath}")
     except Exception as e:
         return ("fail", str(e)) 
     
@@ -647,6 +650,48 @@ def _scrape_page(url,question):
     except Exception as e:
         return None
     
+def _analyse_screen(question):
+    try:
+        result = _screenshot()
+        if result[0] == 'fail':
+            return ("fail", "Unable to detect screen")
+        filepath = result[1].split("=")[1]
+        with open(filepath, "rb") as image:
+            data = types.Part.from_bytes(data=image.read(), mime_type="image/png")
+        os.remove(filepath)
+        
+        response = client.models.generate_content(model=config.GEMINI_MODEL, contents=[data, types.Part.from_text(text=question)])
+        return ("success", response.text)
+    except Exception as e:
+        return ("fail", str(e))
+
+def _analyse_image_file(filename, question):
+    try:
+        filepath = os.path.join(local_path.ALLOWED_WRITE_PATHS[0], filename)
+        if not _is_path_allowed(filepath, local_path.ALLOWED_WRITE_PATHS):
+            return ("fail", "File is outside the workspace folder.")
+
+        mime_types = {
+            ".png": "image/png",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".webp": "image/webp",
+            ".gif": "image/gif"
+        }
+
+        ext = os.path.splitext(filename)[1].lower()
+        mime_type = mime_types.get(ext)
+        if not mime_type:
+            return ("fail", f"Unsupported image format: {ext}")
+
+        with open(filepath, "rb") as image:
+            data = types.Part.from_bytes(data=image.read(), mime_type=mime_type)
+
+        response = client.models.generate_content(model=config.GEMINI_MODEL, contents=[data, types.Part.from_text(text=question)])
+        return ("success", response.text)
+    except Exception as e:
+        return ("fail", str(e))
+    
 _actions = {
     "open_application":_open_application,
     "focus_application":_focus_application,
@@ -672,7 +717,9 @@ _actions = {
     "execute_file":_execute_file,
     "get_time":_get_time,
     "web_search":_web_search,
-    "scrape_page":_scrape_page
+    "scrape_page":_scrape_page,
+    "analyse_screen":_analyse_screen,
+    "analyse_image_file":_analyse_image_file
 }
 
 _action_declarations = [types.FunctionDeclaration(name="open_application", 
@@ -1052,6 +1099,36 @@ _action_declarations = [types.FunctionDeclaration(name="open_application",
                                                           )
                                                       },
                                                       required=["url", "question"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="analyse_screen",
+                                                  description="Takes a screenshot of the current screen and analyses it to answer the user's question. Use this when the user asks what is on their screen, to read something visible on screen, or to understand anything currently displayed.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "question": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The specific question to answer about what is on screen."
+                                                          )
+                                                      },
+                                                      required=["question"]
+                                                  )
+                                                ),
+                        types.FunctionDeclaration(name="analyse_image_file",
+                                                  description="Reads an image file from the workspace folder and analyses it to answer the user's question. Use this when the user asks ARES to look at, read, or understand an image file they have saved to the workspace.",
+                                                  parameters=types.Schema(
+                                                      type=types.Type.OBJECT,
+                                                      properties={
+                                                          "filename": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The filename of the image in the workspace folder, including extension. For example: 'diagram.png'"
+                                                          ),
+                                                          "question": types.Schema(
+                                                              type=types.Type.STRING,
+                                                              description="The specific question to answer about the image."
+                                                          )
+                                                      },
+                                                      required=["filename", "question"]
                                                   )
                                                 )
                         ]
