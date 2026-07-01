@@ -7,7 +7,7 @@ import config
 from . import memory
 from .client import client
 from . import actions
-
+from utils import audio
 # get system prompt
 with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
     system_prompt = system_prompt_file.read()
@@ -150,6 +150,10 @@ def get_response(prompt):
         response_object = chat.send_message(function_responses)
         response = response_object.text
         function_calls = [part for part in response_object.parts if part.function_call]
+    
+    if response:
+        audio.speak(response)
+        audio.flush()
 
     clean_history.append({'role': "user", "text": prompt})
     if response:
@@ -159,5 +163,5 @@ def get_response(prompt):
     with open(config.HIST_JSON, 'w') as hist_f:
         json.dump(upd_data, hist_f)
 
+    
     return response
-

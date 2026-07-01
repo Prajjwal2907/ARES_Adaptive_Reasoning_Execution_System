@@ -64,17 +64,18 @@ def listen(audio_stream):
                             break 
                     # gets full command and transcribes
                     full_audio = np.concatenate(command_buffer)
-                    transcribed_audio =  whisper_model.transcribe(full_audio, language = config.LANGUAGE)
-
-                    # gets response from brain
-                    resp = brain.get_response(transcribed_audio)
-
-                    # prints response if ignore was not returned
-                    if resp:
-                        print(resp)
-                    
-                    # resets active listening timer if speech was detected
                     if speech_detected:
+                        transcribed_audio =  whisper_model.transcribe(full_audio, language = config.LANGUAGE)
+
+                        # gets response from brain
+                        resp = brain.get_response(transcribed_audio["text"])
+
+                        # prints response if ignore was not returned
+                        if resp:
+                            print(resp)
+                    
+                        # resets active listening timer if speech was detected
+                    
                         conv_silence_duration = time.time()
 
                     print("Listening....")
