@@ -4,3 +4,4 @@ data/
 __pycache__/
 *.pyc
 qwen/
+ui/node_modules/

@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARES</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="splash">
+        <img id="splash-logo" src="../assets/ares_splash.png" alt="ARES">
+    </div>
+    <div id="app">
+        <div id="temp-controls">
+            <button id="quit-btn">✕ Quit ARES</button>
+        </div>
+        <div id="visualiser-container">
+            <canvas id="visualiser"></canvas>
+            <div id="state-label">STANDBY</div>
+        </div>
+        <div id="conversation-feed">
+            <div id="response-text"></div>
+        </div>
+        <div id="status-bar">
+            <span id="time-display"></span>
+            <span id="status-indicator"></span>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+</html>

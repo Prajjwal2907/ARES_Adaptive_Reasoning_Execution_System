@@ -10,6 +10,7 @@ import time
 import threading
 from collections import deque
 from . import brain
+from . import ui_bridge
 
 # Initialising models
 whisper_model = whisper.load_model(config.WHISPER_MODEL)
@@ -31,6 +32,7 @@ def listen(audio_stream):
         
         if speech_prob['ares'] > config.SENSITIVITY:  
                 print("Ares activated!")  
+                ui_bridge.send_state('listening')
                 wakeword_model.reset()
                 
                 conv_silence_duration = time.time()
@@ -65,6 +67,7 @@ def listen(audio_stream):
                     # gets full command and transcribes
                     full_audio = np.concatenate(command_buffer)
                     if speech_detected:
+                        ui_bridge.send_state('processing')
                         transcribed_audio =  whisper_model.transcribe(full_audio, language = config.LANGUAGE)
 
                         # gets response from brain
@@ -72,6 +75,7 @@ def listen(audio_stream):
 
                         # prints response if ignore was not returned
                         if resp:
+                            ui_bridge.send_state('listening')
                             print(resp)
                     
                         # resets active listening timer if speech was detected
@@ -80,6 +84,7 @@ def listen(audio_stream):
 
                     print("Listening....")
                 print("Returning to passive listening....")
+                ui_bridge.send_state('standby')
 try:
     while True: 
         listen(aud_stream)

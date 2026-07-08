@@ -8,6 +8,7 @@ from . import memory
 from .client import client
 from . import actions
 from utils import audio
+from . import ui_bridge
 # get system prompt
 with open(config.SYSTEM_PROMPT_FILE, "r") as system_prompt_file:
     system_prompt = system_prompt_file.read()
@@ -163,5 +164,6 @@ def get_response(prompt):
     with open(config.HIST_JSON, 'w') as hist_f:
         json.dump(upd_data, hist_f)
 
-    
+    ui_bridge.send_response(response)
+    ui_bridge.send_state('speaking')
     return response

@@ -1,0 +1,25 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    background: transparent;
+    overflow: hidden;
+    width: 500px;
+    height: 120px;
+}
+
+#overlay-container {
+    width: 500px;
+    height: 120px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+#overlay-canvas {
+    width: 500px;
+    height: 120px;
+}
