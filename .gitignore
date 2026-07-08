@@ -1,7 +1,8 @@
 ARES_env/
-.env
-data/
-__pycache__/
+ARES/.env
+ARES/data/
+ARES/__pycache__/
+ARES/**/__pycache__/
+ARES/assets/qwen/
+ARES/ui/node_modules/
 *.pyc
-qwen/
-ui/node_modules/
