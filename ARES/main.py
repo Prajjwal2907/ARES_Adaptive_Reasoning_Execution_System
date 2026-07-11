@@ -11,6 +11,7 @@
 #         print("ARES:", response)
 
 import os
+import time
 from dotenv import load_dotenv
 
 env_path = os.path.join(os.path.dirname(__file__), '.env')
@@ -25,9 +26,28 @@ if not os.path.exists(env_path):
 load_dotenv()
 
 from core import ui_bridge
+ui_bridge.init()
+ui_bridge.wait_until_connected()
+
+import threading
+
+def handle_text_command(text):
+    print(f"Text command: {text}")
+    ui_bridge.send_state('processing')
+    resp = brain.get_response(text)
+    if resp:
+        ui_bridge.send_state('speaking')
+        ui_bridge.send_response(resp)
+        from utils import audio
+        audio.speak(resp)
+        audio.flush()
+    ui_bridge.send_state('standby')
+
+ui_bridge.on_command(lambda text: threading.Thread(
+    target=handle_text_command, args=(text,), daemon=True
+).start())
+
 from core import brain
 from core import listener
-
-ui_bridge.init()
 
 listener.listen(listener.aud_stream)

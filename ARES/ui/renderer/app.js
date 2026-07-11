@@ -12,6 +12,18 @@ window.addEventListener('DOMContentLoaded', () => {
         splash.style.display = 'none'
     }, 4700)
 })
+// sidebar navigation
+document.querySelectorAll('.nav-item[data-section]').forEach(item => {
+    item.addEventListener('click', () => {
+        const target = item.getAttribute('data-section')
+
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'))
+        item.classList.add('active')
+
+        document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
+        document.getElementById('section-' + target).classList.add('active')
+    })
+})
 
 const canvas = document.getElementById('visualiser')
 const ctx = canvas.getContext('2d')
@@ -168,8 +180,24 @@ function updateTime() {
     const hours = String(now.getHours()).padStart(2, '0')
     const minutes = String(now.getMinutes()).padStart(2, '0')
     const seconds = String(now.getSeconds()).padStart(2, '0')
-    timeDisplay.textContent = `${hours}:${minutes}:${seconds}`
+    const timeStr = `${hours}:${minutes}:${seconds}`
+    document.getElementById('time-display').textContent = timeStr
+    document.getElementById('clock-display').textContent = timeStr
 }
+
+function submitCommand() {
+    const input = document.getElementById('command-input')
+    const text = input.value.trim()
+    if (!text) return
+    input.value = ''
+    window.ares.sendCommand(text)
+}
+
+document.getElementById('command-submit').addEventListener('click', submitCommand)
+
+document.getElementById('command-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') submitCommand()
+})
 
 window.ares.onStateChange((state) => {
     setState(state)
@@ -186,8 +214,12 @@ document.addEventListener('keydown', (e) => {
     if (e.key === '4') setState('speaking')
 })
 
-document.getElementById('quit-btn').addEventListener('click', () => {
+document.getElementById('close-btn').addEventListener('click', () => {
     window.ares.closeMain()
+})
+
+document.getElementById('quit-btn').addEventListener('click', () => {
+    window.ares.quit()
 })
 
 draw()

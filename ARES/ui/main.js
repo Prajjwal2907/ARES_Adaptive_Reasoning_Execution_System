@@ -7,6 +7,7 @@ let overlayWindow = null
 let tray = null
 let isQuitting = false
 let wss = null
+let currentState = 'standby'
 
 function createMainWindow() {
     mainWindow = new BrowserWindow({
@@ -29,11 +30,15 @@ function createMainWindow() {
         mainWindow.maximize()
     })
 
+    
+
     mainWindow.on('close', (e) => {
         if (!isQuitting) {
             e.preventDefault()
             mainWindow.hide()
-            overlayWindow.show()
+            if (currentState !== 'standby') {
+                overlayWindow.show()
+            }
         }
     })
 }
@@ -68,6 +73,7 @@ function createTray() {
             click: () => {
                 overlayWindow.hide()
                 mainWindow.show()
+                mainWindow.focus()
             }
         },
         { type: 'separator' },
@@ -86,6 +92,7 @@ function createTray() {
     tray.on('double-click', () => {
         overlayWindow.hide()
         mainWindow.show()
+        mainWindow.focus()
     })
 }
 
@@ -99,27 +106,32 @@ function startWebSocketServer() {
             try {
                 const data = JSON.parse(message)
 
-                // decide which window to send to
-                const targetWindow = mainWindow.isVisible() ? mainWindow : overlayWindow
-
                 if (data.type === 'state') {
-                    targetWindow.webContents.send('state-change', data.value)
+                    currentState = data.value
 
-                    // if overlay is hidden and state is not standby, show it
-                    if (!mainWindow.isVisible() && data.value !== 'standby') {
+                    // always send to main window for its visualiser
+                    mainWindow.webContents.send('state-change', data.value)
+
+                    // send to overlay too
+                    overlayWindow.webContents.send('state-change', data.value)
+
+                    // show overlay if not focused on main window and not standby
+                    if (!mainWindow.isFocused() && data.value !== 'standby') {
                         overlayWindow.show()
                     }
 
-                    // when conversation ends, hide overlay again
-                    if (!mainWindow.isVisible() && data.value === 'standby') {
+                    // hide overlay after 3 seconds of standby
+                    if (data.value === 'standby') {
                         setTimeout(() => {
-                            overlayWindow.hide()
+                            if (currentState === 'standby') {
+                                overlayWindow.hide()
+                            }
                         }, 3000)
                     }
                 }
 
                 if (data.type === 'response') {
-                    targetWindow.webContents.send('response', data.value)
+                    mainWindow.webContents.send('response', data.value)
                 }
 
             } catch (e) {
@@ -134,9 +146,39 @@ function startWebSocketServer() {
 
     console.log('WebSocket server running on port 8765')
 }
+
+function startFocusPoller() {
+    setInterval(() => {
+        if (!mainWindow || !overlayWindow) return
+
+        const mainFocused = mainWindow.isFocused() && mainWindow.isVisible()
+
+        if (mainFocused) {
+            overlayWindow.hide()
+        } else if (currentState !== 'standby') {
+            overlayWindow.show()
+        }
+    }, 500)
+}
+
+ipcMain.on('command', (event, text) => {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'command', value: text }))
+        }
+    })
+})
+
 ipcMain.on('close-main', () => {
     mainWindow.hide()
-    overlayWindow.show()
+    if (currentState !== 'standby') {
+        overlayWindow.show()
+    }
+})
+
+ipcMain.on('quit-app', () => {
+    isQuitting = true
+    app.quit()
 })
 
 app.whenReady().then(() => {
@@ -144,6 +186,7 @@ app.whenReady().then(() => {
     createMainWindow()
     createTray()
     startWebSocketServer()
+    startFocusPoller()
 })
 
 app.on('before-quit', () => {

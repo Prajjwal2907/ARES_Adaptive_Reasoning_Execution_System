@@ -14,7 +14,7 @@ LANGUAGE = "en"
 WAKEWORD_SAMPLE_RATE = 16000
 WAKEWORD_CHUNK_SIZE = 1280
 WAKEWORD_MODEL = r"ARES\assets\ares.onnx"
-SENSITIVITY = 0.4
+SENSITIVITY = 0.7
 
 # Google api model
 GEMINI_MODEL = "gemini-3.1-flash-lite-preview"

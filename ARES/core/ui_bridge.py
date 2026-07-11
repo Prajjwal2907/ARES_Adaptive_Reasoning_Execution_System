@@ -5,7 +5,12 @@ import time
 
 _ws = None
 _connected = False
+_command_callback = None
 
+def on_command(callback):
+    global _command_callback
+    _command_callback = callback
+    
 def _connect():
     global _ws, _connected
 
@@ -16,9 +21,15 @@ def _connect():
             _connected = True
             print("UI bridge connected")
 
-            # keep connection alive
             while True:
-                time.sleep(1)
+                try:
+                    message = _ws.recv()
+                    if message:
+                        data = json.loads(message)
+                        if data['type'] == 'command' and _command_callback:
+                            _command_callback(data['value'])
+                except:
+                    break
 
         except Exception as e:
             _connected = False
@@ -28,6 +39,16 @@ def _connect():
 def init():
     thread = threading.Thread(target=_connect, daemon=True)
     thread.start()
+
+def wait_until_connected(timeout=30):
+    import time
+    start = time.time()
+    while not _connected:
+        if time.time() - start > timeout:
+            print("UI not connected after 30 seconds, continuing anyway...")
+            return
+        time.sleep(0.2)
+    print("UI ready.")
 
 def send_state(state):
     global _ws, _connected

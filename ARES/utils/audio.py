@@ -5,6 +5,7 @@ import torch
 from qwen_tts import Qwen3TTSModel
 import config
 import queue, threading
+import pickle 
 
 print("Loading ARES voice model:")
 _clone_model = Qwen3TTSModel.from_pretrained(
@@ -14,10 +15,20 @@ _clone_model = Qwen3TTSModel.from_pretrained(
 )
 
 print("Building voice clone prompt...")
-_voice_clone_prompt = _clone_model.create_voice_clone_prompt(
-    ref_audio=config.REFERENCE_AUDIO_PATH,
-    ref_text=config.TTS_REFERENCE_TEXT,
-)
+prompt_path = os.path.join(config.current_dir, "assets", "sounds", "voice_prompt.dat")
+
+if os.path.exists(prompt_path):
+    with open(prompt_path, "rb") as prompt:
+        _voice_clone_prompt = pickle.load(prompt)
+else:
+    _voice_clone_prompt = _clone_model.create_voice_clone_prompt(
+        ref_audio=config.REFERENCE_AUDIO_PATH,
+        ref_text=config.TTS_REFERENCE_TEXT,
+    )
+    with open(prompt_path, "wb") as prompt:
+        pickle.dump(_voice_clone_prompt, prompt)
+
+
 print("ARES voice ready.")
 
 _buffer = ""

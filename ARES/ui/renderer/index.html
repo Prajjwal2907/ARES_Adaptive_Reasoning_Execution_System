@@ -7,25 +7,108 @@
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+
     <div id="splash">
         <img id="splash-logo" src="../assets/ares_splash.png" alt="ARES">
     </div>
+
     <div id="app">
-        <div id="temp-controls">
-            <button id="quit-btn">✕ Quit ARES</button>
+
+        <div id="sidebar">
+            <div id="sidebar-logo">
+                <img src="../assets/ares_icon.png" alt="ARES">
+                <span>ARES</span>
+            </div>
+
+            <nav id="sidebar-nav">
+                <div class="nav-item active" data-section="home">
+                    <span class="nav-icon">⌂</span>
+                    <span class="nav-label">Home</span>
+                </div>
+                <div class="nav-item" data-section="history">
+                    <span class="nav-icon">☰</span>
+                    <span class="nav-label">History</span>
+                </div>
+                <div class="nav-item" data-section="memory">
+                    <span class="nav-icon">◈</span>
+                    <span class="nav-label">Memory</span>
+                </div>
+                <div class="nav-item" data-section="dashboard">
+                    <span class="nav-icon">▣</span>
+                    <span class="nav-label">Dashboard</span>
+                </div>
+                <div class="nav-item" data-section="settings">
+                    <span class="nav-icon">⚙</span>
+                    <span class="nav-label">Settings</span>
+                </div>
+            </nav>
+
+            <div id="sidebar-bottom">
+                <div id="close-btn" class="nav-item">
+                    <span class="nav-icon">▣</span>
+                    <span class="nav-label">Close Window</span>
+                </div>
+                <div id="quit-btn" class="nav-item">
+                    <span class="nav-icon">✕</span>
+                    <span class="nav-label">Shut Down</span>
+                </div>
+            </div>
         </div>
-        <div id="visualiser-container">
-            <canvas id="visualiser"></canvas>
-            <div id="state-label">STANDBY</div>
+
+        <div id="content">
+
+            <div id="section-home" class="section active">
+                <div id="clock-display"></div>
+                <div id="visualiser-container">
+                    <canvas id="visualiser"></canvas>
+                    <div id="state-label">STANDBY</div>
+                </div>
+                <div id="conversation-feed">
+                    <div id="response-text"></div>
+                </div>
+                <div id="command-bar">
+                    <input type="text" id="command-input" placeholder="Enter command..." autocomplete="off" spellcheck="false">
+                    <button id="command-submit">SEND</button>
+                </div>
+                <div id="status-bar">
+                    <span id="time-display"></span>
+                    <span id="status-indicator"></span>
+                </div>
+            </div>
+
+            <div id="section-history" class="section">
+                <div class="section-header">Conversation History</div>
+                <div class="section-content">
+                    <p class="placeholder-text">History will appear here.</p>
+                </div>
+            </div>
+
+            <div id="section-memory" class="section">
+                <div class="section-header">Memory</div>
+                <div class="section-content">
+                    <p class="placeholder-text">Stored memories will appear here.</p>
+                </div>
+            </div>
+
+            <div id="section-dashboard" class="section">
+                <div class="section-header">Dashboard</div>
+                <div class="section-content">
+                    <p class="placeholder-text">System status and action log will appear here.</p>
+                </div>
+            </div>
+
+            <div id="section-settings" class="section">
+                <div class="section-header">Settings</div>
+                <div class="section-content">
+                    <p class="placeholder-text">Settings will appear here.</p>
+                </div>
+            </div>
+
         </div>
-        <div id="conversation-feed">
-            <div id="response-text"></div>
-        </div>
-        <div id="status-bar">
-            <span id="time-display"></span>
-            <span id="status-indicator"></span>
-        </div>
+
     </div>
+
     <script src="app.js"></script>
+    <script src="ambient.js"></script>
 </body>
 </html>
