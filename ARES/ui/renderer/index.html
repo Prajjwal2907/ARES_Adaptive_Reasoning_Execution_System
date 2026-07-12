@@ -77,16 +77,51 @@
             </div>
 
             <div id="section-history" class="section">
-                <div class="section-header">Conversation History</div>
-                <div class="section-content">
-                    <p class="placeholder-text">History will appear here.</p>
+                <div class="section-header">
+                    Conversation History
+                    <button id="history-refresh-btn">↻ REFRESH</button>
+                </div>
+                <div class="section-content" id="history-content">
+                    <p class="placeholder-text">Loading history...</p>
                 </div>
             </div>
 
             <div id="section-memory" class="section">
-                <div class="section-header">Memory</div>
-                <div class="section-content">
-                    <p class="placeholder-text">Stored memories will appear here.</p>
+                <div class="section-header">
+                    Memory
+                    <button id="memory-refresh-btn">↻ REFRESH</button>
+                </div>
+                <div class="section-content" id="memory-content">
+
+                    <div class="memory-category">
+                        <div class="memory-category-title">Profile</div>
+                        <div id="memory-profile"></div>
+                    </div>
+
+                    <div class="memory-category">
+                        <div class="memory-category-title">Standing Instructions</div>
+                        <div id="memory-instructions"></div>
+                        <div class="memory-add-row">
+                            <input type="text" id="instruction-input" placeholder="Add new instruction..." autocomplete="off" spellcheck="false">
+                            <button id="instruction-submit">ADD</button>
+                        </div>
+                    </div>
+
+                    <div class="memory-category">
+                        <div class="memory-category-title">Semantic Memories</div>
+                        <div id="memory-semantic"></div>
+                    </div>
+
+                    <div class="memory-category">
+                        <div class="memory-category-title">Procedural Memories</div>
+                        <div id="memory-procedural"></div>
+                    </div>
+
+                    <div class="memory-category">
+                        <div class="memory-category-title">Episodic Summaries</div>
+                        <div id="memory-episodes"></div>
+                    </div>
+
                 </div>
             </div>
 

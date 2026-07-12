@@ -8,7 +8,7 @@ from sentence_transformers import SentenceTransformer
 
 os.makedirs(config.CHROMA_DIR, exist_ok=True)
 
-conn = sqlite3.connect(config.SQLITE_DB)
+conn = sqlite3.connect(config.SQLITE_DB, check_same_thread=False)
 chroma_client = chromadb.PersistentClient(path = config.CHROMA_DIR)
 sentence_transformer_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
 

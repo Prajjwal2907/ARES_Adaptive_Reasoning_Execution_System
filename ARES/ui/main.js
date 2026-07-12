@@ -105,7 +105,9 @@ function startWebSocketServer() {
         ws.on('message', (message) => {
             try {
                 const data = JSON.parse(message)
-
+                if (data.type === 'memory-data') {
+                    mainWindow.webContents.send('memory-data', data.value)
+                }
                 if (data.type === 'state') {
                     currentState = data.value
 
@@ -181,6 +183,38 @@ ipcMain.on('quit-app', () => {
     app.quit()
 })
 
+const fs = require('fs')
+
+ipcMain.handle('get-history', () => {
+    try {
+        const historyPath = path.join(__dirname, '..', 'data', 'memory', 'history.json')
+        console.log('Looking for history at:', historyPath)
+        if (!fs.existsSync(historyPath)) {
+            console.log('File not found at that path')
+            return []
+        }
+        const data = JSON.parse(fs.readFileSync(historyPath, 'utf8'))
+        return data.history || []
+    } catch (e) {
+        console.error('Failed to read history:', e)
+        return []
+    }
+})
+ipcMain.on('get-memory', () => {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'get-memory' }))
+        }
+    })
+})
+
+ipcMain.on('memory-action', (event, action, payload) => {
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.send(JSON.stringify({ type: 'memory-action', action, payload }))
+        }
+    })
+})
 app.whenReady().then(() => {
     createOverlayWindow()
     createMainWindow()

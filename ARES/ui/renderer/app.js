@@ -12,7 +12,8 @@ window.addEventListener('DOMContentLoaded', () => {
         splash.style.display = 'none'
     }, 4700)
 })
-// sidebar navigation
+
+// sidebar navigation — single unified listener
 document.querySelectorAll('.nav-item[data-section]').forEach(item => {
     item.addEventListener('click', () => {
         const target = item.getAttribute('data-section')
@@ -22,9 +23,185 @@ document.querySelectorAll('.nav-item[data-section]').forEach(item => {
 
         document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
         document.getElementById('section-' + target).classList.add('active')
+
+        if (target === 'history') loadHistory()
+        if (target === 'memory') loadMemory()
     })
 })
 
+// history
+async function loadHistory() {
+    const content = document.getElementById('history-content')
+    content.innerHTML = '<p class="placeholder-text">Loading...</p>'
+
+    const history = await window.ares.getHistory()
+
+    if (!history || history.length === 0) {
+        content.innerHTML = '<p class="history-empty">No conversation history for today.</p>'
+        return
+    }
+
+    content.innerHTML = ''
+
+    for (let i = 0; i < history.length; i += 2) {
+        const userMsg = history[i]
+        const aresMsg = history[i + 1]
+
+        if (!userMsg) continue
+
+        const exchange = document.createElement('div')
+        exchange.className = 'history-exchange'
+
+        const userDiv = document.createElement('div')
+        userDiv.className = 'history-user'
+        userDiv.textContent = userMsg.text
+        exchange.appendChild(userDiv)
+
+        if (aresMsg) {
+            const aresDiv = document.createElement('div')
+            aresDiv.className = 'history-ares'
+            aresDiv.textContent = aresMsg.text
+            exchange.appendChild(aresDiv)
+        }
+
+        content.appendChild(exchange)
+    }
+
+    content.scrollTop = content.scrollHeight
+}
+
+document.getElementById('history-refresh-btn').addEventListener('click', loadHistory)
+
+// memory
+window.ares.onMemoryData((data) => {
+    renderMemory(data)
+})
+
+function loadMemory() {
+    document.getElementById('memory-content').style.opacity = '0.5'
+    window.ares.getMemory()
+}
+
+function renderMemory(data) {
+    document.getElementById('memory-content').style.opacity = '1'
+
+    // profile
+    const profileDiv = document.getElementById('memory-profile')
+    profileDiv.innerHTML = ''
+    Object.entries(data.profile).forEach(([field, val]) => {
+        const row = document.createElement('div')
+        row.className = 'memory-profile-row'
+        row.innerHTML = `
+            <span class="memory-profile-field">${field}</span>
+            <input class="memory-profile-edit" value="${val}" data-field="${field}">
+        `
+        row.querySelector('input').addEventListener('change', (e) => {
+            window.ares.memoryAction('update-profile', { field, val: e.target.value })
+        })
+        profileDiv.appendChild(row)
+    })
+
+    // instructions
+    const instDiv = document.getElementById('memory-instructions')
+    instDiv.innerHTML = ''
+    if (data.instructions.length === 0) {
+        instDiv.innerHTML = '<div class="memory-empty">No standing instructions.</div>'
+    } else {
+        data.instructions.forEach(inst => {
+            const item = document.createElement('div')
+            item.className = 'memory-item'
+            item.innerHTML = `
+                <div class="memory-item-text">${inst.text}</div>
+                <button class="memory-delete-btn">REVOKE</button>
+            `
+            item.querySelector('button').addEventListener('click', () => {
+                window.ares.memoryAction('revoke-instruction', { id: inst.id })
+            })
+            instDiv.appendChild(item)
+        })
+    }
+
+    // semantic
+    const semDiv = document.getElementById('memory-semantic')
+    semDiv.innerHTML = ''
+    if (data.semantic.length === 0) {
+        semDiv.innerHTML = '<div class="memory-empty">No semantic memories stored.</div>'
+    } else {
+        data.semantic.forEach(mem => {
+            const item = document.createElement('div')
+            item.className = 'memory-item'
+            item.innerHTML = `
+                <div>
+                    <div class="memory-item-text">${mem.text}</div>
+                    <div class="memory-item-meta">${mem.metadata.tags || ''} · importance ${mem.metadata.importance || 0}</div>
+                </div>
+                <button class="memory-delete-btn">DELETE</button>
+            `
+            item.querySelector('button').addEventListener('click', () => {
+                window.ares.memoryAction('delete-semantic', { id: mem.id })
+            })
+            semDiv.appendChild(item)
+        })
+    }
+
+    // procedural
+    const procDiv = document.getElementById('memory-procedural')
+    procDiv.innerHTML = ''
+    if (data.procedural.length === 0) {
+        procDiv.innerHTML = '<div class="memory-empty">No procedural memories stored.</div>'
+    } else {
+        data.procedural.forEach(mem => {
+            const item = document.createElement('div')
+            item.className = 'memory-item'
+            item.innerHTML = `
+                <div>
+                    <div class="memory-item-text">${mem.text}</div>
+                    <div class="memory-item-meta">${mem.metadata.tags || ''} · importance ${mem.metadata.importance || 0}</div>
+                </div>
+                <button class="memory-delete-btn">DELETE</button>
+            `
+            item.querySelector('button').addEventListener('click', () => {
+                window.ares.memoryAction('delete-procedural', { id: mem.id })
+            })
+            procDiv.appendChild(item)
+        })
+    }
+
+    // episodes
+    const epDiv = document.getElementById('memory-episodes')
+    epDiv.innerHTML = ''
+    if (data.episodes.length === 0) {
+        epDiv.innerHTML = '<div class="memory-empty">No episodic summaries yet.</div>'
+    } else {
+        data.episodes.forEach(ep => {
+            const item = document.createElement('div')
+            item.className = 'memory-item'
+            item.innerHTML = `
+                <div>
+                    <div class="memory-item-text">${ep.summary}</div>
+                    <div class="memory-item-meta">${ep.date.split('T')[0]}</div>
+                </div>
+            `
+            epDiv.appendChild(item)
+        })
+    }
+}
+
+document.getElementById('memory-refresh-btn').addEventListener('click', loadMemory)
+
+document.getElementById('instruction-submit').addEventListener('click', () => {
+    const input = document.getElementById('instruction-input')
+    const text = input.value.trim()
+    if (!text) return
+    input.value = ''
+    window.ares.memoryAction('add-instruction', { text })
+})
+
+document.getElementById('instruction-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') document.getElementById('instruction-submit').click()
+})
+
+// visualiser
 const canvas = document.getElementById('visualiser')
 const ctx = canvas.getContext('2d')
 const stateLabel = document.getElementById('state-label')
@@ -123,20 +300,13 @@ function drawMorphedPath(getY, radius, color, glowMultiplier, widthMultiplier) {
 
     for (let i = 0; i <= NUM_POINTS; i++) {
         const t = i / NUM_POINTS
-
-        // wave position
         const waveX = t * canvas.width
         const waveY = getY(waveX)
-
-        // circle position — points evenly distributed around the circumference
         const angle = t * Math.PI * 2 + rotationAngle
         const circleX = cx + radius * Math.cos(angle)
         const circleY = cy + radius * Math.sin(angle)
-
-        // morph between the two
         const x = lerp(waveX, circleX, morphProgress)
         const y = lerp(waveY, circleY, morphProgress)
-
         if (i === 0) {
             ctx.moveTo(x, y)
         } else {
@@ -153,17 +323,11 @@ function draw() {
 
     interpolateToTarget()
 
-    // morph progress toward 1 when processing, toward 0 otherwise
     const targetMorph = currentState === 'processing' ? 1 : 0
     morphProgress = lerp(morphProgress, targetMorph, 0.035)
-
-    // rotation only matters when morphed toward circle
     rotationAngle += current.speed * morphProgress
 
-    // primary path
     drawMorphedPath(getWaveY, CIRCLE_RADIUS, CRIMSON, 1, 1)
-
-    // echo path
     drawMorphedPath(getWaveYEcho, CIRCLE_RADIUS - 15, CRIMSON_DIM, 0.5, 0.6)
 
     animFrame++
@@ -205,6 +369,10 @@ window.ares.onStateChange((state) => {
 
 window.ares.onResponse((text) => {
     responseText.textContent = text
+    const historySection = document.getElementById('section-history')
+    if (historySection.classList.contains('active')) {
+        loadHistory()
+    }
 })
 
 document.addEventListener('keydown', (e) => {
